@@ -1,42 +1,42 @@
 ```mermaid
 flowchart TD
-    A([Bắt đầu]) --> B[Khởi động Playwright codegen và WatchHandler]
-    B --> C[/Thiết lập biến theo dõi file:<br/>- last_line_count = 0<br/>- last_content_hash = None/]
+    A([Start]) --> B[Start Playwright codegen and WatchHandler]
+    B --> C[/Initialize tracking variables:<br/>- number_of_all_current_lines = 0<br/>- last_content_hash = None/]
     
-    C --> D[Bắt đầu theo dõi file JSONL tạm]
+    C --> D[Start monitoring temporary JSONL file]
     
-    subgraph PlaywrightAndWatcher["Playwright Test và WatchHandler"]
-        E[Chạy test và tương tác với web] --> F[/Sinh và lưu flow JSONL vào file tạm/]
-        F --> G{Phát hiện thay đổi file?}
-        G -- Không --> E
-        G -- Có --> H[/Kiểm tra hash nội dung/]
-        H --> I{Hash thay đổi?}
-        I -- Không --> E
-        I -- Có --> J[/Đếm số dòng hiện tại/]
+    subgraph PlaywrightAndWatcher["Playwright Test and WatchHandler"]
+        E[Run test and interact with web] --> F[/Generate and save JSONL flow to temp file/]
+        F --> G{File change detected?}
+        G -- No --> E
+        G -- Yes --> H[/Check content hash/]
+        H --> I{Hash changed?}
+        I -- No --> E
+        I -- Yes --> J[/Count current lines/]
         
-        J --> K{So sánh số dòng}
-        K -- Dòng tăng lên --> L[/Đọc dòng mới thêm vào/]
-        L --> M[Format dòng mới theo chuẩn JSONL]
-        M --> N[/Thêm vào file JSONL đích/]
+        J --> K{Compare line count}
+        K -- Lines increased --> L[/Read newly added lines/]
+        L --> M[Format new lines according to JSONL standard]
+        M --> N[/Append to target JSONL file/]
         
-        K -- Số dòng không đổi --> O{Chỉ dòng cuối thay đổi?}
-        O -- Có --> P[/Xóa dòng cuối của file đích/]
-        P --> Q[Format lại dòng cuối]
-        Q --> R[/Thêm dòng đã format vào file đích/]
+        K -- Line count unchanged --> O{Only last line changed?}
+        O -- Yes --> P[/Remove last line from target file/]
+        P --> Q[Reformat last line]
+        Q --> R[/Add formatted line to target file/]
         
-        O -- Không --> S([Không làm gì])
+        O -- No --> S([Do nothing])
         
-        K -- Số dòng giảm --> T[/Ghi lại toàn bộ file đích/]
+        K -- Lines decreased --> T[/Rewrite entire target file/]
         
-        N --> U[/Cập nhật biến theo dõi/]
+        N --> U[/Update tracking variables/]
         R --> U
         S --> U
         T --> U
         
-        U --> V{Tiếp tục test?}
-        V -- Có --> E
-        V -- Không --> W([Kết thúc])
+        U --> V{Continue testing?}
+        V -- Yes --> E
+        V -- No --> W([End])
     end
     
     D --> PlaywrightAndWatcher
-    W --> X([Kết thúc chương trình])
+    W --> X([End program])

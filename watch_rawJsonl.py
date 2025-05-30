@@ -174,9 +174,9 @@ class WatcherEventHandler(FileSystemEventHandler):
 
         if self.last_input_content_hash is None or \
            current_line_count < self.last_input_line_count:
-            print(f"📜 Đã phát hiện thay đổi nội dung file, tui không làm gì đâu, tự sửa đii.")
-            # print(f"📜 Thay đổi lớn hoặc lần đầu: Xử lý lại toàn bộ ({current_line_count} dòng).")
-            # self._perform_full_rewrite(current_input_lines, current_hash)
+            # print(f"📜 Đã phát hiện thay đổi nội dung file, tui không làm gì đâu, tự sửa đii.")
+            print(f"📜 Thay đổi lớn hoặc lần đầu: Xử lý lại toàn bộ ({current_line_count} dòng, đặt lại timestamp).")
+            self._perform_full_rewrite(current_input_lines, current_hash)
         
         elif current_line_count == self.last_input_line_count: 
             # Đây là trường hợp anh muốn xử lý đặc biệt nè!
