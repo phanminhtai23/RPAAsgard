@@ -7,7 +7,6 @@ import re
 import requests
 from playwright.sync_api import sync_playwright
 from google.adk.tools import LongRunningFunctionTool
-import multiprocessing
 
 # 🔧 Setup logging để debug
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -16,36 +15,45 @@ logger = logging.getLogger(__name__)
 # 🌟 Biến toàn cục để cache HTML content theo URL và device type
 HTML_CACHE = {}
 
-# 🌟 Biến toàn cục để cache HTML content theo URL và device type
-HTML_CACHE = {}
+def get_html_content_tool(url: str, device_type: str = "desktop") -> dict:
+    """Uses Playwright to retrieve rendered HTML content (after JS execution), extracting <body> only."""
 
-def _playwright_worker(url: str, device_type: str, queue: multiprocessing.Queue):
-    """
-    This function runs in a separate process to fetch HTML using Playwright,
-    avoiding any conflicts with the main process's asyncio loop.
-    """
+    print("🚀 FUNCTION CALLED: get_html_content", flush=True)
+    print("📍 URL:", url, flush=True)
+    print("📱 Device Type:", device_type, flush=True)
+    logger.info(f"🚀 get_html_content called with URL: {url}, device_type: {device_type}")
+    
+    cache_key = f"{url}|{device_type.lower()}"
+    if cache_key in HTML_CACHE:
+        print("💾 USING CACHE for:", cache_key, flush=True)
+        logger.info(f"💾 Using cache for: {cache_key}")
+        cached_result = HTML_CACHE[cache_key].copy()
+        cached_result["from_cache"] = True
+        return cached_result
+
     try:
         with sync_playwright() as p:
             browser_type = p.webkit if device_type == "mobile" else p.chromium
             browser = browser_type.launch(headless=True)
             
-            # 🚀 Thiết lập ngôn ngữ là 'en-US' và gộp với cấu hình device
-            context_args = { 'locale': 'en-US' }
-            if device_type == "mobile":
-                context_args.update(p.devices['iPhone 13'])
-
-            context = browser.new_context(**context_args)
-            
+            context = browser.new_context(
+                **(browser.devices['iPhone 13'] if device_type == "mobile" else {})
+            )
             page = context.new_page()
-            page.goto(url, timeout=20000, wait_until='load') # Increased timeout slightly
-            
+            page.goto(url, timeout=15000, wait_until='load')
+            print("✅ Page loaded", flush=True)
+
             full_html = page.content()
+            
+            # Trích xuất body
             body_handle = page.query_selector('body')
             body_content = body_handle.inner_html() if body_handle else full_html
             body_wrapped = f"<body>{body_content}</body>" if body_handle else full_html
             
-            browser.close()
-
+            print("✂️ Extracted rendered <body> content", flush=True)
+            logger.info(f"✂️ Extracted rendered <body> content - Length: {len(body_wrapped)}")
+            
+            # 📦 Tạo result object
             result = {
                 "status": "success",
                 "html_content": body_wrapped,
@@ -54,65 +62,19 @@ def _playwright_worker(url: str, device_type: str, queue: multiprocessing.Queue)
                 "original_length": len(full_html),
                 "device_type": device_type,
                 "from_cache": False,
-                "rendered_with": "playwright_sync_multiprocess"
+                "rendered_with": "playwright"
             }
-            queue.put(result)
+            
+            HTML_CACHE[cache_key] = result.copy()
+            return result
             
     except Exception as e:
         error_result = {
             "status": "error",
-            "error_message": f"Playwright (multiprocess) error for '{url}' with device '{device_type}': {str(e)}",
+            "error_message": f"Playwright error for '{url}' with device '{device_type}': {str(e)}",
             "from_cache": False
         }
-        queue.put(error_result)
-
-def get_html_content(url: str, device_type: str = "desktop") -> dict:
-    """
-    Fetches rendered HTML by running Playwright in a SEPARATE PROCESS
-    to avoid asyncio loop conflicts. It checks a global cache first.
-    """
-    print(f"🚀 MULTIPROCESS SUPERVISOR CALLED for URL: {url}", flush=True)
-    logger.info(f"🚀 MULTIPROCESS get_html_content called with URL: {url}, device_type: {device_type}")
-
-    cache_key = f"{url}|{device_type.lower()}"
-    if cache_key in HTML_CACHE:
-        print(f"💾 USING CACHE for: {cache_key}", flush=True)
-        logger.info(f"💾 Using cache for: {cache_key}")
-        cached_result = HTML_CACHE[cache_key].copy()
-        cached_result["from_cache"] = True
-        return cached_result
-
-    try:
-        # Create a queue to get the result back from the child process
-        queue = multiprocessing.Queue()
-        
-        # Create and start the process
-        process = multiprocessing.Process(target=_playwright_worker, args=(url, device_type, queue))
-        process.start()
-        
-        # Wait for the process to finish and get the result
-        # This blocks until the child process puts a result in the queue
-        result = queue.get(timeout=60) # Add a timeout to prevent hanging forever
-        process.join()
-
-        # Cache the result if it was successful
-        if result.get("status") == "success":
-            HTML_CACHE[cache_key] = result.copy()
-
-        return result
-
-    except multiprocessing.queues.Empty:
-        return {
-            "status": "error",
-            "error_message": f"Timeout exceeded while waiting for Playwright process for '{url}'.",
-            "from_cache": False
-        }
-    except Exception as e:
-         return {
-            "status": "error",
-            "error_message": f"Multiprocessing supervisor error for '{url}': {str(e)}",
-            "from_cache": False
-        }
+        return error_result
 
 
 
@@ -153,7 +115,7 @@ def save_html_to_file(html_content: str, filename: str) -> dict:
             "error_message": f"Lỗi khi lưu file: {str(e)}"
         }
 
-get_html_content_tool = LongRunningFunctionTool(func=get_html_content)
+get_html_content = LongRunningFunctionTool(func=get_html_content_tool)
 
 root_agent = Agent(
     name="root_agent",
@@ -256,6 +218,6 @@ test('test', async (\{ page \}) => {
   await page.locator("xpath=//form[contains(@class, 'js-login-form')]//button[normalize-space()='Sign in']").click();
 });
         """,
-    tools=[get_html_content_tool],
+    tools=[get_html_content],
 )
 

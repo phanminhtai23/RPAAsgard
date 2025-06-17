@@ -76,3 +76,6 @@
         await page.locator("xpath=//div[contains(@class, 'auth-form-body')]//input[@id='login_field']").fill('testuser');
         await page.locator("xpath=//div[contains(@class, 'auth-form-body')]//input[@id='password']").fill('password123');
         });
+
+        * Priority 1: Direct ID Selection. First, inspect the target element itself within the fetched HTML. If the element has a unique id attribute, you MUST use this id to create the XPath. This is the most stable and preferred method. The process for this element stops here.
+* Syntax: //TagName[@id='unique-id-value'] or simply //*[@id='unique-id-value']
